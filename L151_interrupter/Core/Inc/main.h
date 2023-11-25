@@ -63,7 +63,7 @@ void writeStatusLED(uint8_t status);
 void board_ok();
 void sendUSB(char *s, uint16_t bytes);
 uint64_t getMicros();
-void USBDataReceived_IT(uint8_t* Buf, uint32_t *len);
+void USBDataReceived_IT(uint8_t* buf, uint32_t *len);
 void printToUSB(char* s);
 /* USER CODE END EFP */
 
@@ -116,9 +116,10 @@ void printToUSB(char* s);
 
 /* State Definition ---------------------------------------------------------*/
 #define MODE_SELECT 0 //SD Card, Burst, or Fixed
-#define SD_MODE 1
-#define BURST_MODE 2
-#define FIXED_MODE 3
+#define SD_MODE 	1
+#define BURST_MODE 	2
+#define FIXED_MODE 	3
+#define MODIFYING	4
 
 #define MODE_NUM 3
 
@@ -145,8 +146,8 @@ void printToUSB(char* s);
 /* Display constant Definition ------------------------------------------------------*/
 #define MAX_ROW 			4
 #define MAX_CHAR_ON_SCREEN 	19
-#define MAX_FILE_LENGTH 	20
-#define MAX_FILENAME_LENGTH 32
+#define MAX_NUM_FILES 		25
+#define MAX_FILENAME_LENGTH 40
 
 #define FREQ_DISP_POS 	6
 #define T_ON_DISP_POS 	6

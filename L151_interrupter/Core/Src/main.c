@@ -89,6 +89,7 @@ uint16_t noteFreq[60] = {
 		 523,     554,    587,    622,    659,    698,    740,    784,    831,    880,    932,    988 //5's
 };
 
+
 FATFS fs;
 FIL fil;
 FRESULT fresult;
@@ -105,6 +106,7 @@ uint8_t songNum = 0;
 boolean isDirOpen = false;
 boolean isPlaying = false;
 boolean printed = false;
+boolean isModifyingFiles = false;
 uint8_t scrollPosition = 0;
 uint16_t frequency = 10, prevFrequency = 10;
 uint16_t t_on = MAX_TIME_ON;
@@ -118,7 +120,7 @@ boolean inSubmode = false;
 boolean updateTimeScroll = true;
 uint32_t timeForScroll = 0;
 int fileCount = 0;
-char fileNames[MAX_FILE_LENGTH][MAX_FILENAME_LENGTH];
+char fileNames[MAX_NUM_FILES][MAX_FILENAME_LENGTH];
 char displayedText[MAX_CHAR_ON_SCREEN];
 
 /* USER CODE END PV */
@@ -482,6 +484,41 @@ void turnOffAllCoils() {
 	coil5Freq = 0;
 
 }
+
+FRESULT readFileNamesFromSD(){
+
+	//clear the filename list
+	for(int i = 0; i < MAX_NUM_FILES; i++){
+		for(int j = 0; j < MAX_FILENAME_LENGTH; j++){
+			fileNames[i][j] = 0;
+		}
+	}
+
+
+	//Open SD card and store all file names in an array
+	fresult = f_opendir(&dir, "");
+	if (fresult == FR_OK) {
+		// Read the directory and store file names
+		for (;;) {
+			fresult = f_readdir(&dir, &fno);
+			if (fresult != FR_OK || fno.fname[0] == 0) {
+				break; // No more files in the directory or an error occurred
+			}
+			if (fno.fattrib & AM_DIR) {
+				// Skip directories
+				continue;
+			}
+			// Copy the file name to the array
+			strncpy(fileNames[fileCount++], fno.fname, MAX_FILENAME_LENGTH);
+		}
+		f_closedir(&dir);
+		//The last option is always "BACK" to mode selection
+		strncpy(fileNames[fileCount], "BACK", MAX_FILENAME_LENGTH);
+
+	}
+	return fresult;
+}
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -536,24 +573,17 @@ int main(void) {
 
 	initLCD(&lcd, &hi2c2, MAX_ROW, 20, 0x27);
 	setCursor(&lcd, 0, 0);
-
 	HAL_ADC_Start(&hadc);
-
-
 	HAL_GPIO_WritePin(GPIOB, Flash__wp_Pin | Flash__Hold_Pin, GPIO_PIN_SET);//active low signals
-
 	writeStatusLED(0b11001100);
-
 	HAL_ADC_Start_IT(&hadc);
-
 	HAL_Delay(50);
 	fresult = f_mount(&fs, "", 1);
 	if (fresult != FR_OK)
 		printToUSB("Error mounting SD card");
 
-
 	/* USER CODE END 2 */
-
+	/* USER CODE BEGIN 3 */
 	HAL_TIM_PWM_Start(&COIL1, COIL1_CH);	//IFe96 1
 	HAL_TIM_PWM_Start(&COIL2, COIL2_CH);	//IFe96 2
 	HAL_TIM_PWM_Start(&COIL3, COIL3_CH);	//IFe96 3
@@ -564,40 +594,27 @@ int main(void) {
 	htim3.Instance->CCR1 = 0;
 	htim4.Instance->CCR1 = 0;
 	htim10.Instance->CCR1 = 0;
-	/* USER CODE BEGIN 3 */
 
-	//Open SD card and store all file names in an array
-	fresult = f_opendir(&dir, "");
+	readFileNamesFromSD();
 
-
-	if (fresult == FR_OK) {
-		// Read the directory and store file names
-		for (;;) {
-			fresult = f_readdir(&dir, &fno);
-			if (fresult != FR_OK || fno.fname[0] == 0) {
-				break; // No more files in the directory or an error occurred
-			}
-			if (fno.fattrib & AM_DIR) {
-				// Skip directories
-				continue;
-			}
-
-			// Copy the file name to the array
-			strncpy(fileNames[fileCount++], fno.fname, 30);
-		}
-		f_closedir(&dir);
-	}
-
-	//The last option is always "BACK" to mode selection
-	strncpy(fileNames[fileCount], "BACK", 30);
 	(void)LCDCursorOffBlinkOff(&lcd);
-
 
 	while (1) {
 		time = HAL_GetTick();
 
+		//if a USB interrupt is received, then deal with it. do not return here until
+//		if(isModifyingFiles == true){
+//			state = MODIFYING;
+//		}
+
 		switch (state) {
+		case MODIFYING:
+			//pretty much everything is done in the USB communication
+
+
+			break;
 		case MODE_SELECT:
+
 			songNum = 0;
 
 			//List all modes
@@ -974,11 +991,6 @@ int main(void) {
 
 	}
 }
-
-
-
-
-
 
 
 /**
@@ -1870,34 +1882,35 @@ void printToUSB(char *s) {
 	int len = strlen(s);
 	CDC_Transmit_FS((uint8_t*)s, len);
 }
-void USBDataReceived_IT(uint8_t *Buf, uint32_t *len) {
-	//	memcpy(midiData[eventPointer], Buf, 6);
-	//	eventPointer++;
-	//	if(eventPointer < 512){
-	//		midiData[eventPointer][0] = *Buf;
-	//		midiData[eventPointer][1] = *(Buf+1);
-	//		midiData[eventPointer][2] = *(Buf+2);
-	//		midiData[eventPointer][3] = *(Buf+3);
-	//		midiData[eventPointer][4] = *(Buf+4);
-	//		midiData[eventPointer][5] = *(Buf+5);
-	//		eventPointer++;
-	//	}
-	//	writeStatusLED((uint8_t)*len);
 
-	for (int i = 0; i < (*len) / 3; i++) {
-		uint8_t track = *Buf;
-		Buf++;
-		uint16_t freq = noteFreq[*Buf - 24];
-		Buf++;
-		uint16_t velocity = *Buf;
-		Buf++;
-		if (track == 1)
-			setTimerFrequencyPulseWidth(&htim3, freq, velocity, TIM_CHANNEL_1);
+//if the data is 4 bytes of the ascii char '@', set the mode to modifying
+#define GET_CMD		0
+#define	PRINT_NAMES	1
+#define DELETE		2
+
+uint8_t usbRecvState;
+void USBDataReceived_IT(uint8_t *buf, uint32_t *len) {
+
+	if(*len == 2){
+		if(buf[0] == '@' && buf[1] == '@'){
+			state = MODIFYING;
+			for(int i = 0; i < fileCount; i++){
+				printToUSB(fileNames[i]);
+				CDC_Transmit_FS((uint8_t *)"\n", 1);
+			}
+			printToUSB("end of files");
+		}
+		else{
+
+		}
+
 	}
+	else if(*len > 2){
 
+	}
 	//CDC_Transmit_FS(Buf, *len);
 	//clear the buffer
-	//	memset(USB_Rx_Buf, '\0', sizeof(USB_Rx_Buf));
+//	memset(USB_Rx_Buf, '\0', sizeof(USB_Rx_Buf));
 	//
 	//	//then copy contents
 	//	memcpy(USB_Rx_Buf, Buf, (uint8_t)*len);

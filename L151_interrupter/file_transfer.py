@@ -11,12 +11,14 @@ print(s)
 exit(0)
 '''
 
+BAUD_RATE = 115200
 C_LS   = bytearray(['@', '@'])
 
 C_DONE = bytearray(['d', 'd'])
 
 #open a serial port with the microcontroller
-ser = serial.Serial("COMx", 115200, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE)
+
+ser = serial.Serial("COM4", BAUD_RATE, serial.EIGHTBITS, serial.PARITY_NONE, serial.STOPBITS_ONE)
 
 #256 byte packets
 #first 252 bytes data
